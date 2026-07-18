@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 5%;
+    --foreground: 180 100% 95%;
+
+    --card: 222 47% 8%;
+    --card-foreground: 180 100% 95%;
+
+    --popover: 222 47% 8%;
+    --popover-foreground: 180 100% 95%;
+
+    --primary: 180 100% 50%;
+    --primary-foreground: 222 47% 5%;
+
+    --secondary: 300 100% 50%;
+    --secondary-foreground: 222 47% 5%;
+
+    --muted: 222 30% 15%;
+    --muted-foreground: 222 10% 60%;
+
+    --accent: 50 100% 50%;
+    --accent-foreground: 222 47% 5%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 180 100% 95%;
+
+    --border: 180 50% 20%;
+    --input: 180 50% 15%;
+    --ring: 180 100% 50%;
+
+    --radius: 0.5rem;
+
+    --cyber-neon: 180 100% 50%;
+    --cyber-magenta: 300 100% 50%;
+    --cyber-cyan: 180 100% 50%;
+    --cyber-yellow: 50 100% 50%;
+    --cyber-dark: 222 47% 8%;
+    --cyber-darker: 222 47% 3%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .cyber-border {
+    @apply border border-cyan-500/30 shadow-[0_0_10px_rgba(0,255,255,0.1)];
+  }
+
+  .cyber-glow-text {
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  }
+
+  .cyber-grid-bg {
+    background-image:
+      linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  .scan-line-effect::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.5), transparent);
+    animation: scan-line 4s linear infinite;
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  .glitch-text {
+    position: relative;
+  }
+
+  .glitch-text::before,
+  .glitch-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .glitch-text::before {
+    left: 2px;
+    text-shadow: -1px 0 #ff00ff;
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim 5s infinite linear alternate-reverse;
+  }
+
+  .glitch-text::after {
+    left: -2px;
+    text-shadow: -1px 0 #00ffff;
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim2 5s infinite linear alternate-reverse;
+  }
+}
+
+@keyframes scan-line {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+@keyframes glitch-anim {
+  0% {
+    clip: rect(28px, 9999px, 68px, 0);
+  }
+  20% {
+    clip: rect(74px, 9999px, 11px, 0);
+  }
+  40% {
+    clip: rect(38px, 9999px, 95px, 0);
+  }
+  60% {
+    clip: rect(13px, 9999px, 76px, 0);
+  }
+  80% {
+    clip: rect(98px, 9999px, 85px, 0);
+  }
+  100% {
+    clip: rect(46px, 9999px, 27px, 0);
+  }
+}
+
+@keyframes glitch-anim2 {
+  0% {
+    clip: rect(65px, 9999px, 100px, 0);
+  }
+  20% {
+    clip: rect(52px, 9999px, 74px, 0);
+  }
+  40% {
+    clip: rect(79px, 9999px, 85px, 0);
+  }
+  60% {
+    clip: rect(75px, 9999px, 5px, 0);
+  }
+  80% {
+    clip: rect(67px, 9999px, 61px, 0);
+  }
+  100% {
+    clip: rect(14px, 9999px, 79px, 0);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--cyber-darker));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--cyber-neon) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--cyber-neon) / 0.5);
+}

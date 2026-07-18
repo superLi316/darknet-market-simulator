@@ -1,0 +1,534 @@
+// Prisma Schema - DarkNet Market Survival Simulator
+// 暗网集市生存模拟器数据模型
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "sqlite"
+  url       = env("DATABASE_URL")
+}
+
+// ============================================
+// 枚举定义（SQLite 使用 String 模拟）
+// ============================================
+
+// UserRole: PLAYER | ADMIN | NPC
+// PlayerStatus: ALIVE | DEAD | BANNED | SUSPENDED
+// PersonalityType: HARDWORKING | LAZY | SPECULATOR | CAUTIOUS | CRAZY
+// ItemCategory: CONSUMABLE | SKILL_CHIP | COMMODITY
+// WorkType: CARRYING | HACKING | FORGERY | DELIVERY | MINING
+// WorkDifficulty: EASY | MEDIUM | HARD
+// TransactionType: BUY | SELL | CONSUME
+// EventType: PRICE_SURGE | TRADE_FREEZE | BONUS | FAMINE
+// EventScope: GLOBAL | SPECIFIC_ITEMS
+// AuditAction: USER_CREATE | USER_UPDATE | USER_DELETE | USER_BAN | USER_UNBAN | BALANCE_ADJUST | HEALTH_RESTORE | PERSONALITY_RESET | ITEM_GRANT | PRICE_ADJUST | EVENT_CREATE | EVENT_DISABLE | TROPHY_GRANT
+// TrophyTier: SMALL | LARGE
+// NotificationType: SYSTEM | DEATH | EVENT | TRADE | WORK | TROPHY | ACHIEVEMENT | SKILL_UP | CRIT
+// BuffType: STAMINA_RECOVER | HEALTH_RECOVER | HEALTH_DAMAGE | STAMINA_MAX | EARNINGS_BOOST | TRADE_BOOST | CRIT_BOOST
+
+// ============================================
+// 用户相关模型
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String?   @unique
+  passwordHash  String
+  role          String    @default("PLAYER") // PLAYER | ADMIN | NPC
+  status        String    @default("ALIVE")
+  personality   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  // 玩家属性
+  balance       Float     @default(100)
+  health        Int       @default(100)
+  stamina       Int       @default(100)
+  maxStamina    Int       @default(100)
+  lastStaminaRecover DateTime @default(now())
+
+  // 经济统计
+  totalEarned   Float     @default(0)
+  totalSpent    Float     @default(0)
+  totalProfit   Float     @default(0)
+  totalLoss     Float     @default(0)
+  tradeCount    Int       @default(0)
+  workCount     Int       @default(0)
+  survivalDays  Int       @default(0)
+  deathCount    Int       @default(0)
+
+  // 死亡相关
+  deathReason   String?
+  diedAt        DateTime?
+
+  // 奖杯统计
+  smallTrophies Int       @default(0)
+  largeTrophies Int       @default(0)
+
+  // 新增字段
+  avatar        String?   // 头像 URL
+  currentTitleId String?  // 当前激活的头衔
+  marketRefreshCount Int  @default(0) // 今日手动刷新次数
+  marketRefreshDate  DateTime? // 上次刷新日期
+  gameDay       Int       @default(1) // 游戏日
+  npcDailyEarnings  Float @default(0) // NPC 每日收益（仅 NPC 使用）
+  npcLastUpdate     DateTime? // NPC 上次更新时间
+  totalChipsPurchased Int  @default(0) // 累计购买芯片次数（用于价格递增）
+
+  // 关联
+  inventory     InventoryItem[]
+  transactions  Transaction[]
+  workRecords   WorkRecord[]
+  trophies      Trophy[]
+  notifications Notification[]
+  skills        UserSkill[]
+  playerTitles  PlayerTitle[]
+  playerAchievements PlayerAchievement[]
+  assetHistory  AssetHistory[]
+
+  auditLogs     AuditLog[] @relation("AuditTarget")
+  auditLogsAsAdmin AuditLog[] @relation("AuditAdmin")
+
+  @@index([role])
+  @@index([status])
+  @@index([personality])
+  @@index([createdAt])
+}
+
+// ============================================
+// 商品与物品相关模型
+// ============================================
+
+model Item {
+  id             String       @id @default(cuid())
+  name           String       @unique
+  description    String
+  category       String       // CONSUMABLE | SKILL_CHIP | COMMODITY
+  basePrice      Float
+  minPrice       Float
+  maxPrice       Float
+  currentPrice   Float
+  priceHistory   PriceRecord[]
+
+  // 商品属性
+  weight         Float?       // 重量（影响搬运）
+  shelfLifeDays  Int?         // 保质期（天），仅消耗品有效
+  skillBonus     String?      // 技能加成，仅技能芯片有效（JSON 字符串）
+
+  // 消耗品属性（食品饮料合并为 CONSUMABLE）
+  buffType       String?      // buff 类型: STAMINA_RECOVER | HEALTH_RECOVER | HEALTH_DAMAGE | STAMINA_MAX | EARNINGS_BOOST | TRADE_BOOST | CRIT_BOOST
+  buffValue      Float?       // buff 数值
+  buffDuration   Int?         // buff 持续时间（分钟），0 表示即时
+  healthEffect   Int          @default(0) // 健康值变化（负数为损失）
+  staminaEffect  Int          @default(0) // 体力值变化
+
+  // 交易统计
+  buyVolume24h   Int          @default(0)
+  sellVolume24h  Int          @default(0)
+  tradeCount24h  Int          @default(0)
+
+  // 市场刷新相关
+  isDefault      Boolean      @default(true) // 是否为默认商品（始终出现）
+  rarity         Int          @default(1) // 稀有度 1-5，影响刷新概率
+
+  // 元数据
+  isActive       Boolean      @default(true)
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // 关联
+  transactions   Transaction[]
+  inventoryItems InventoryItem[]
+  marketStories  MarketStory[]
+
+  @@index([category])
+  @@index([isActive])
+  @@index([sortOrder])
+  @@index([isDefault])
+}
+
+model PriceRecord {
+  id        String   @id @default(cuid())
+  itemId    String
+  price     Float
+  timestamp DateTime @default(now())
+
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, timestamp])
+}
+
+// ============================================
+// 库存相关模型
+// ============================================
+
+model InventoryItem {
+  id            String   @id @default(cuid())
+  userId        String
+  itemId        String
+  quantity      Int      @default(1)
+  buyPrice      Float    // 买入单价，用于 FIFO 计算
+  purchaseDate  DateTime @default(now())
+  expiresAt     DateTime? // 过期时间，仅食物/水有效
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item          Item     @relation(fields: [itemId], references: [id])
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([expiresAt])
+}
+
+// ============================================
+// 劳动相关模型
+// ============================================
+
+model WorkTypeConfig {
+  id           String         @id @default(cuid())
+  workType     String       @unique
+  name         String
+  description  String
+  basePay      Float
+  staminaCost  Int
+  skillRequirement String?
+  difficulty   String
+  cooldownMinutes Int
+  minLevel     Int            @default(1)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model WorkRecord {
+  id              String      @id @default(cuid())
+  userId          String
+  workType        String
+  difficulty      String
+  basePay         Float
+  personalityBonus Float       @default(1)
+  skillBonus      Float       @default(1)
+  finalEarnings   Float
+  staminaCost     Int
+  completedAt     DateTime    @default(now())
+  success         Boolean     @default(true)
+  failureReason   String?
+
+  // 暴击系统
+  isCritical      Boolean     @default(false) // 是否暴击
+  critMultiplier  Float       @default(1) // 暴击倍率
+  healthLoss      Int          @default(0) // 健康值损失（困难劳动）
+
+  // 技能升级
+  skillUpgraded   Boolean     @default(false) // 是否触发技能升级
+  upgradedSkillId String?     // 升级的技能ID
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workType])
+  @@index([completedAt])
+}
+
+// ============================================
+// 交易相关模型
+// ============================================
+
+model Transaction {
+  id              String      @id @default(cuid())
+  userId          String
+  itemId          String
+  type            String       // BUY | SELL | CONSUME
+  quantity        Int
+  unitPrice       Float
+  totalAmount     Float
+  profitLoss      Float?      // 仅卖出时有值
+  fifoMatches     String?     // FIFO 匹配详情（JSON 字符串）
+
+  // 价格上下文
+  priceAtTrade    Float
+  basePriceAtTrade Float
+  eventInfluence  String?     // 影响价格的事件ID
+
+  // 技能升级（交易时触发）
+  skillUpgraded   Boolean     @default(false)
+  upgradedSkillId String?
+
+  timestamp       DateTime    @default(now())
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item            Item        @relation(fields: [itemId], references: [id])
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([type])
+  @@index([timestamp])
+}
+
+// ============================================
+// 技能相关模型
+// ============================================
+
+model Skill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  skillType   String   // LABOR, TRADING, SURVIVAL
+  bonusType   String   // EFFICIENCY, PROFIT, STAMINA, etc.
+  bonusValue  Float
+  maxLevel    Int      @default(5)
+  icon        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userSkills  UserSkill[]
+}
+
+model UserSkill {
+  id        String   @id @default(cuid())
+  userId    String
+  skillId   String
+  level     Int      @default(1)
+  chipCount Int      @default(0) // 已购买的芯片数量（用于升级）
+  acquiredAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     Skill    @relation(fields: [skillId], references: [id])
+
+  @@unique([userId, skillId])
+  @@index([userId])
+}
+
+// ============================================
+// 奖杯相关模型
+// ============================================
+
+model Trophy {
+  id         String     @id @default(cuid())
+  userId     String
+  tier       String
+  name       String
+  description String?
+  earnedAt   DateTime   @default(now())
+  cost       Float      // 兑换消耗的货币
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tier])
+  @@index([earnedAt])
+}
+
+// ============================================
+// 系统事件模型
+// ============================================
+
+model SystemEvent {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  eventType   String
+  scope       String
+  effectValue Float       // 影响系数，如 1.5 表示价格变为 150%
+  targetItemIds String    // 特定商品ID（JSON 字符串），当 scope 为 SPECIFIC_ITEMS 时
+
+  startTime   DateTime
+  endTime     DateTime
+  isActive    Boolean     @default(true)
+  createdBy   String?     // 管理员ID
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([eventType])
+  @@index([isActive])
+  @@index([startTime])
+  @@index([endTime])
+}
+
+// ============================================
+// 通知模型
+// ============================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  content   String
+  isRead    Boolean          @default(false)
+  metadata  String?
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================
+// 审计日志模型
+// ============================================
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  adminId     String?
+  targetUserId String?
+  action      String
+  description String
+  beforeData  String?
+  afterData   String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  admin       User?       @relation("AuditAdmin", fields: [adminId], references: [id])
+  targetUser  User?       @relation("AuditTarget", fields: [targetUserId], references: [id])
+
+  @@index([adminId])
+  @@index([targetUserId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// 每日结算记录
+// ============================================
+
+model DailySettlement {
+  id              String   @id @default(cuid())
+  userId          String
+  settlementDate  DateTime
+  startingHealth  Int
+  endingHealth    Int
+  waterConsumed   Int
+  foodConsumed    Int
+  waterDeficit    Int
+  foodDeficit     Int
+  healthLost      Int
+  survived        Boolean
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([settlementDate])
+  @@unique([userId, settlementDate])
+}
+
+// ============================================
+// 市场故事模型 - 暗示商品价格变化
+// ============================================
+
+model MarketStory {
+  id          String   @id @default(cuid())
+  storyText   String   // 故事文本
+  hintType    String   // 暗示类型: PRICE_UP | PRICE_DOWN | DEMAND_UP | DEMAND_DOWN
+  itemId      String?  // 关联商品（null 表示通用提示）
+  gameDay     Int      // 游戏日
+  isPremium   Boolean  @default(false) // 是否为付费提示
+  priceImpact Float   @default(0) // 预期价格影响系数
+  createdAt   DateTime @default(now())
+
+  item        Item?    @relation(fields: [itemId], references: [id])
+
+  @@index([itemId])
+  @@index([gameDay])
+  @@index([isPremium])
+}
+
+// ============================================
+// 成就与头衔系统
+// ============================================
+
+model Achievement {
+  id          String   @id @default(cuid())
+  code        String   @unique // 成就代码
+  name        String
+  description String
+  category    String   // WORK | TRADE | SURVIVAL | SKILL | TROPHY | SPECIAL
+  condition   String   // 达成条件（JSON 字符串）
+  titleId     String?  // 完成后获得的头衔
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  title       Title?   @relation("AchievementTitle", fields: [titleId], references: [id])
+  playerAchievements PlayerAchievement[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model PlayerAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  completedAt   DateTime @default(now())
+  progress      Float    @default(0) // 进度 0-100
+
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+model Title {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String
+  buffType    String   // buff 类型: EARNINGS_BOOST | TRADE_BOOST | CRIT_BOOST | STAMINA_MAX | HEALTH_MAX
+  buffValue   Float    // buff 数值
+  buffDuration Int     @default(0) // 0 表示永久
+  icon        String?
+  rarity      Int      @default(1) // 稀有度 1-5
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  playerTitles PlayerTitle[]
+  achievements Achievement[] @relation("AchievementTitle")
+
+  @@index([isActive])
+  @@index([rarity])
+}
+
+model PlayerTitle {
+  id        String   @id @default(cuid())
+  userId    String
+  titleId   String
+  acquiredAt DateTime @default(now())
+  isActive  Boolean  @default(false) // 是否当前激活
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     Title    @relation(fields: [titleId], references: [id])
+
+  @@unique([userId, titleId])
+  @@index([userId])
+  @@index([isActive])
+}
+
+// ============================================
+// 资产历史记录 - 用于资产变化图表
+// ============================================
+
+model AssetHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  gameDay     Int
+  balance     Float    // 当日余额
+  inventoryValue Float // 库存价值
+  totalAssets Float    // 总资产
+  earned      Float    @default(0) // 当日收益
+  spent       Float    @default(0) // 当日支出
+  recordedAt  DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gameDay])
+  @@unique([userId, gameDay])
+}
