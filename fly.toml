@@ -1,11 +1,10 @@
 app = "darknet-market-sim"
 
 [build]
-  builder = "heroku/buildpacks:20"
 
 [env]
   DATABASE_URL = "file:/data/dev.db"
-  NEXTAUTH_URL = "https://darknet-market-sim.fly.dev"
+  NEXTAUTH_SECRET = "change-me-to-a-random-string-at-least-32-chars"
 
 [mounts]
   source = "sqlite_data"
@@ -21,4 +20,4 @@ app = "darknet-market-sim"
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256
+  memory_mb = 512
